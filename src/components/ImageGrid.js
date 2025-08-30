@@ -1,6 +1,6 @@
 // Import necessary components and libraries from React Native and other dependencies
-import React, { useMemo, useState } from 'react';
-import { View, Image, StyleSheet, Pressable, ActivityIndicator, Dimensions } from 'react-native';
+import React, { useMemo, useState, useEffect } from 'react';
+import { View, Image, StyleSheet, Pressable, ActivityIndicator, Dimensions, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { theme } from '../constants/themes';
 import { hp, wp } from '../helpers/common';
@@ -8,11 +8,15 @@ import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as FileSystem from 'expo-file-system';
 import { BlurView } from 'expo-blur';
 import LoadingIndicator from './LoadingIndicator';
-
-const COLUMN_COUNT = 2;
-const SPACING = theme.spacing.sm;
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const ITEM_WIDTH = (SCREEN_WIDTH - (COLUMN_COUNT + 1) * SPACING * 2) / COLUMN_COUNT;
+import { 
+  getGridColumns, 
+  getSpacing, 
+  getImageDimensions, 
+  getMaxContainerWidth,
+  getContainerPadding,
+  supportsHover,
+  screenWidth 
+} from '../utils/responsive';
 
 const getRandomHeight = () => {
   // Much taller height ratios
@@ -86,24 +90,53 @@ const ImageItem = React.memo(({ item, aspectRatio, onPress }) => {
 
 const ImageGrid = ({ images, onLoadMore, loading }) => {
   const navigation = useNavigation();
+  const [screenData, setScreenData] = useState({
+    columns: getGridColumns(),
+    spacing: getSpacing(8),
+    containerPadding: getContainerPadding(),
+    itemWidth: 0
+  });
 
-  // Organize images into two columns with balanced heights
+  useEffect(() => {
+    const updateLayout = () => {
+      const columns = getGridColumns();
+      const spacing = getSpacing(8);
+      const containerPadding = getContainerPadding();
+      const maxWidth = getMaxContainerWidth();
+      const availableWidth = Math.min(screenWidth, maxWidth) - (containerPadding * 2);
+      const itemWidth = (availableWidth - (spacing * (columns - 1))) / columns;
+      
+      setScreenData({
+        columns,
+        spacing,
+        containerPadding,
+        itemWidth
+      });
+    };
+
+    updateLayout();
+    const subscription = Dimensions.addEventListener('change', updateLayout);
+    return () => subscription?.remove();
+  }, []);
+
+  // Organize images into responsive columns with balanced heights
   const columns = useMemo(() => {
-    const cols = [[], []]; // Initialize two columns
-    let colHeights = [0, 0]; // Track height of each column
+    const columnCount = screenData.columns;
+    const cols = Array(columnCount).fill(null).map(() => []);
+    const colHeights = Array(columnCount).fill(0);
 
     images.forEach((item) => {
       const aspectRatio = getRandomHeight();
-      const imageHeight = ITEM_WIDTH / aspectRatio;
+      const imageHeight = screenData.itemWidth / aspectRatio;
       
-      // Add to shorter column
-      const shorterColIndex = colHeights[0] <= colHeights[1] ? 0 : 1;
-      cols[shorterColIndex].push({ ...item, aspectRatio, height: imageHeight });
-      colHeights[shorterColIndex] += imageHeight + SPACING * 2;
+      // Find the shortest column
+      const shortestColIndex = colHeights.indexOf(Math.min(...colHeights));
+      cols[shortestColIndex].push({ ...item, aspectRatio, height: imageHeight });
+      colHeights[shortestColIndex] += imageHeight + screenData.spacing;
     });
 
     return cols;
-  }, [images]);
+  }, [images, screenData]);
 
   const renderColumn = (items, columnIndex) => {
     return (
@@ -111,14 +144,14 @@ const ImageGrid = ({ images, onLoadMore, loading }) => {
         key={`column-${columnIndex}`} 
         style={[
           styles.column,
-          columnIndex === 0 && { marginRight: SPACING }
+          columnIndex < screenData.columns - 1 && { marginRight: screenData.spacing }
         ]}
       >
         {items.map((item, index) => (
           <Animated.View
             key={`${columnIndex}-${item.id}-${index}`}
             entering={FadeInDown.delay(index * 50).springify()}
-            style={styles.itemContainer}
+            style={[styles.itemContainer, { marginBottom: screenData.spacing }]}
           >
             <ImageItem
               item={item}
@@ -135,8 +168,12 @@ const ImageGrid = ({ images, onLoadMore, loading }) => {
     );
   };
 
-    return (
-        <View style={styles.container}>
+  return (
+    <View style={[styles.container, {
+      paddingHorizontal: screenData.containerPadding,
+      maxWidth: getMaxContainerWidth(),
+      alignSelf: 'center'
+    }]}>
       <View style={styles.grid}>
         {columns.map((column, index) => renderColumn(column, index))}
       </View>
@@ -153,18 +190,18 @@ const ImageGrid = ({ images, onLoadMore, loading }) => {
 };
 
 const styles = StyleSheet.create({
-    container: {
+  container: {
     flex: 1,
-    paddingHorizontal: SPACING,
+    width: '100%',
   },
   grid: {
     flexDirection: 'row',
+    justifyContent: 'center',
   },
   column: {
     flex: 1,
   },
   itemContainer: {
-    marginBottom: SPACING * 2,
     ...theme.shadows.lg,
   },
   imageContainer: {
@@ -173,6 +210,10 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     elevation: 8,
     ...theme.shadows.lg,
+    ...(supportsHover && {
+      cursor: 'pointer',
+      transition: 'all 0.2s ease-in-out',
+    }),
   },
   image: {
     width: '100%',

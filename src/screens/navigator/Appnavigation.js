@@ -22,28 +22,50 @@ import { FavoritesProvider } from '../../constants/FavoritesContext';
 import { ProfileProvider } from '../../constants/ProfileContext';
 import { DownloadsProvider } from '../../constants/DownloadsContext';
 import { BlurView } from 'expo-blur';
+import { 
+  getDeviceType,
+  responsiveFont,
+  getSpacing,
+  isWeb,
+  supportsHover
+} from '../../utils/responsive';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
-const BOTTOM_TAB_HEIGHT = 70;
+
+const getResponsiveTabHeight = () => {
+  const deviceType = getDeviceType();
+  const heights = {
+    mobile: 70,
+    tablet: 80,
+    desktop: 90,
+    largeDesktop: 100,
+    ultraWide: 110
+  };
+  return heights[deviceType] || 70;
+};
 
 const MainTabs = () => {
+  const deviceType = getDeviceType();
+  const tabHeight = getResponsiveTabHeight();
+  const iconSize = deviceType === 'mobile' ? 24 : deviceType === 'tablet' ? 28 : 32;
+  
   return (
     <Tab.Navigator
       screenOptions={{
         tabBarBackground: () => (
           <BlurView
-            intensity={100}
+            intensity={isWeb ? 80 : 100}
             tint="dark"
             style={[StyleSheet.absoluteFill, styles.tabBarBackground]}
           />
         ),
-        tabBarStyle: [styles.tabBar],
+        tabBarStyle: [styles.tabBar, { height: tabHeight }],
         tabBarActiveTintColor: theme.colors.primary,
         tabBarInactiveTintColor: theme.colors.textSecondary,
         headerShown: false,
         tabBarLabelStyle: styles.tabBarLabel,
-        tabBarItemStyle: styles.tabBarItem,
+        tabBarItemStyle: [styles.tabBarItem, { paddingTop: getSpacing(10) }],
       }}
     >
       <Tab.Screen
@@ -107,27 +129,33 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: BOTTOM_TAB_HEIGHT,
     backgroundColor: 'transparent',
     borderTopWidth: 0,
     elevation: 0,
-    paddingBottom: Platform.OS === 'ios' ? 20 : 10,
-    paddingHorizontal: 10,
+    paddingBottom: Platform.OS === 'ios' ? getSpacing(20) : getSpacing(10),
+    paddingHorizontal: getSpacing(10),
+    ...(isWeb && supportsHover && {
+      cursor: 'default',
+    }),
   },
-  // tabBarBackground: {
-  //   borderTopLeftRadius: 30,
-  //   borderTopRightRadius: 30,
-  //   backgroundColor: 'rgba(30, 27, 75, 0.95)',
-  //   borderTopWidth: 1,
-  //   borderTopColor: 'rgba(255, 255, 255, 0.1)',
-  //   ...theme.shadows.luxury,
-  // },
+  tabBarBackground: {
+    borderTopLeftRadius: getSpacing(20),
+    borderTopRightRadius: getSpacing(20),
+    backgroundColor: 'rgba(30, 27, 75, 0.95)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    ...theme.shadows.luxury,
+  },
   tabBarLabel: {
-    fontSize: 12,
+    fontSize: responsiveFont(12),
     fontWeight: '600',
     marginBottom: Platform.OS === 'ios' ? 0 : 5,
   },
   tabBarItem: {
-    paddingTop: 10,
+    paddingTop: getSpacing(10),
+    ...(supportsHover && {
+      cursor: 'pointer',
+      transition: 'all 0.2s ease-in-out',
+    }),
   },
 });

@@ -17,6 +17,15 @@ import Animated, {
   withSpring 
 } from 'react-native-reanimated'
 import { BlurView } from 'expo-blur'
+import {
+  getMaxContainerWidth,
+  getContainerPadding,
+  responsiveFont,
+  getSpacing,
+  supportsHover,
+  isWeb,
+  getDeviceType
+} from '../../utils/responsive'
 
 // Define the Home functional component
 const Home = ({ onScroll }) => {
@@ -414,57 +423,70 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
+    maxWidth: getMaxContainerWidth(),
+    alignSelf: 'center',
+    width: '100%',
   },
   headerContainer: {
     backgroundColor: theme.colors.background,
-    paddingTop: Platform.OS === 'ios' ? 50 : 40,
+    paddingTop: Platform.OS === 'ios' ? getSpacing(50) : getSpacing(40),
   },
   headerBlur: {
-    paddingHorizontal: 15,
-    paddingBottom: 10,
+    paddingHorizontal: getContainerPadding(),
+    paddingBottom: getSpacing(10),
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 5,
+    marginTop: getSpacing(5),
   },
   headertext: {
-    fontSize: 24,
+    fontSize: responsiveFont(24),
     fontWeight: 'bold',
     color: theme.colors.text,
   },
   filterButton: {
-    padding: 8,
-    borderRadius: 12,
+    padding: getSpacing(8),
+    borderRadius: getSpacing(12),
     backgroundColor: theme.colors.surface,
     borderWidth: 1,
     borderColor: theme.colors.border,
     ...theme.shadows.sm,
+    ...(supportsHover && {
+      cursor: 'pointer',
+      transition: 'all 0.2s ease-in-out',
+    }),
   },
   SearchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.colors.surface,
-    borderRadius: 20,
-    marginTop: 15,
-    marginBottom: 5,
-    paddingHorizontal: 20,
-    height: 52,
+    borderRadius: getSpacing(20),
+    marginTop: getSpacing(15),
+    marginBottom: getSpacing(5),
+    paddingHorizontal: getSpacing(20),
+    height: getSpacing(52),
     borderWidth: 1,
     borderColor: theme.colors.borderLight,
     ...theme.shadows.luxury,
   },
   Icon: {
-    marginRight: 10,
+    marginRight: getSpacing(10),
   },
   textInput: {
     flex: 1,
     color: theme.colors.text,
-    fontSize: 16,
+    fontSize: responsiveFont(16),
+    ...(isWeb && {
+      outlineStyle: 'none',
+    }),
   },
   clearButton: {
-    padding: 5,
+    padding: getSpacing(5),
+    ...(supportsHover && {
+      cursor: 'pointer',
+    }),
   },
   scrollContent: {
     paddingTop: 0,
