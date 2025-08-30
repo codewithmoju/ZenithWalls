@@ -4,9 +4,9 @@ import { Data } from '../constants/Data'
 import { hp, wp } from '../helpers/common'
 import { theme } from '../constants/themes'
 import Animated, { FadeInRight } from 'react-native-reanimated'
+import { LinearGradient } from 'expo-linear-gradient'
 
-
-const CategoriesComponent = ({activeCategory,handleActiveCategory}) => {
+const CategoriesComponent = ({activeCategory, handleActiveCategory}) => {
     return (
         <FlatList
             horizontal
@@ -16,8 +16,8 @@ const CategoriesComponent = ({activeCategory,handleActiveCategory}) => {
             keyExtractor={item => item}
             renderItem={({ item, index }) => (
                 <CategoriesItems
-                isActive={activeCategory==item}
-                handleActiveCategory={handleActiveCategory}
+                    isActive={activeCategory==item}
+                    handleActiveCategory={handleActiveCategory}
                     title={item}
                     index={index}
                 />
@@ -28,42 +28,81 @@ const CategoriesComponent = ({activeCategory,handleActiveCategory}) => {
 
 export default CategoriesComponent
 
-const CategoriesItems = ({ title, index,isActive,handleActiveCategory }) => {
-let color=isActive?theme.colors.white:theme.colors.black;
-let backgroundColor=isActive?theme.colors.black:theme.colors.white;
-
-
+const CategoriesItems = ({ title, index, isActive, handleActiveCategory }) => {
     return (
-        <Animated.View entering={FadeInRight.delay(index*200).duration(1000).springify().damping(14)}>
+        <Animated.View 
+            entering={FadeInRight.delay(index*200).duration(1000).springify().damping(14)}
+            style={styles.itemContainer}
+        >
             <Pressable
-            onPress={()=>handleActiveCategory(isActive?null:title)}
-            style={[styles.Categories,{backgroundColor}]}>
-                <Text style={[styles.title,{color}]}>
-                    {title}
-                </Text>
+                onPress={() => handleActiveCategory(isActive ? null : title)}
+                style={styles.buttonContainer}
+            >
+                {isActive ? (
+                    <LinearGradient
+                        colors={theme.colors.gradientRoyal}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={[styles.Categories, styles.activeCategory]}
+                    >
+                        <Text style={[styles.title, { color: theme.colors.white }]}>
+                            {title}
+                        </Text>
+                    </LinearGradient>
+                ) : (
+                    <View style={[styles.Categories, styles.inactiveCategory]}>
+                        <Text style={[styles.title, { color: theme.colors.textPrimary }]}>
+                            {title}
+                        </Text>
+                    </View>
+                )}
             </Pressable>
-
         </Animated.View>
     )
 }
 
 const styles = StyleSheet.create({
-    FlatListContainer:{
-        paddingHorizontal:wp(4),
-        gap:8
+    FlatListContainer: {
+        paddingHorizontal: wp(4),
+        gap: 8
     },
-    Categories:{
-        padding:10,
-        paddingHorizontal:15,
-        borderRadius:theme.radius.lg,
-        borderCurve:'continuous',
-        borderWidth:1,
-        borderColor:theme.colors.grayBG,
-        backgroundColor:theme.colors.white
+    itemContainer: {
+        marginRight: 8
     },
-    title:{
-        fontSize:hp(1.9),
-        color:theme.colors.black,
-        fontWeight:theme.fontWeights.medium
+    buttonContainer: {
+        overflow: 'hidden',
+        borderRadius: theme.radius.lg,
+    },
+    Categories: {
+        padding: 10,
+        paddingHorizontal: 15,
+        borderRadius: theme.radius.lg,
+        borderCurve: 'continuous',
+        borderWidth: 1,
+        borderColor: 'transparent',
+        backgroundColor: theme.colors.white,
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+    },
+    title: {
+        fontSize: hp(1.9),
+        fontWeight: theme.fontWeights.semibold,
+        letterSpacing: 0.5
+    },
+    inactiveCategory: {
+        backgroundColor: theme.colors.surface,
+        borderColor: theme.colors.border,
+        ...theme.shadows.sm,
+    },
+    activeCategory: {
+        ...theme.shadows.primaryShadow,
+        borderWidth: 0,
+        transform: [{ scale: 1.05 }],
     }
 })

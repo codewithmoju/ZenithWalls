@@ -5,14 +5,14 @@ import {
     BottomSheetModal,
     BottomSheetView,
 } from '@gorhom/bottom-sheet';
-import { BlurView } from "@react-native-community/blur";
+import { BlurView } from "expo-blur";
 import Animated, { Extrapolation, FadeInDown, interpolate, useAnimatedStyle } from 'react-native-reanimated';
-import { captilization, hp } from '../helpers/common';
+import { captilization, hp, wp } from '../helpers/common';
 import { theme } from '../constants/themes';
 import SectionView, { ColorFilters, CommonFilterRow } from './SectionView';
 import { Data } from '../constants/Data';
-
-
+import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialIcons } from '@expo/vector-icons';
 
 // Define the FiltersComponent functional component
 const FiltersComponent = ({ Modalref, onClose, onApply, onReset, filters, setFilters }) => {
@@ -24,12 +24,16 @@ const FiltersComponent = ({ Modalref, onClose, onApply, onReset, filters, setFil
             snapPoints={snapPoints}
             enablePanDownToClose={true}
             backdropComponent={CustomBackDrop}
+            handleIndicatorStyle={styles.handleIndicator}
         >
             <BottomSheetView style={styles.contentContainer}>
                 <View style={styles.Content}>
-                    <Text style={styles.title}>
-                        Filters
-                    </Text>
+                    <View style={styles.header}>
+                        <Text style={styles.title}>
+                            Filters
+                        </Text>
+                        <MaterialIcons name="tune" size={24} color={theme.colors.text} />
+                    </View>
                     {
                         Object.keys(Sections).map((sectionName, index) => {
                             let sectionView = Sections[sectionName];
@@ -37,7 +41,7 @@ const FiltersComponent = ({ Modalref, onClose, onApply, onReset, filters, setFil
                             let sectionData = Data.filters[sectionName]
                             return (
                                 <Animated.View key={sectionName}
-                                entering={FadeInDown.delay((index*100)+100).springify().damping(11)}
+                                    entering={FadeInDown.delay((index*100)+100).springify().damping(11)}
                                 >
                                     <SectionView
                                         title={title}
@@ -46,7 +50,6 @@ const FiltersComponent = ({ Modalref, onClose, onApply, onReset, filters, setFil
                                             filters,
                                             setFilters,
                                             filterName: sectionName,
-
                                         })}
                                     />
                                 </Animated.View>
@@ -56,20 +59,26 @@ const FiltersComponent = ({ Modalref, onClose, onApply, onReset, filters, setFil
 
                     {/* Actions */}
                     <Animated.View style={styles.Buttons}
-                     entering={FadeInDown.delay(500).springify().damping(11)}
+                        entering={FadeInDown.delay(500).springify().damping(11)}
                     >
                         <Pressable style={styles.resetButton} onPress={onReset}>
-                            <Text style={[styles.ButtonText, { color: theme.colors.black }]}>
-                                Reset
+                            <Text style={[styles.ButtonText, { color: theme.colors.text }]}>
+                                Reset All
                             </Text>
                         </Pressable>
-                        <Pressable style={styles.applyButton} onPress={onApply}>
-                            <Text style={[styles.ButtonText, { color: theme.colors.white }]}>
-                                Apply 
-                            </Text>
-                        </Pressable>
+                        <LinearGradient
+                            colors={theme.colors.gradientRoyal}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.applyButtonGradient}
+                        >
+                            <Pressable style={styles.applyButton} onPress={onApply}>
+                                <Text style={[styles.ButtonText, { color: theme.colors.white }]}>
+                                    Apply Filters
+                                </Text>
+                            </Pressable>
+                        </LinearGradient>
                     </Animated.View>
-
                 </View>
             </BottomSheetView>
         </BottomSheetModal>
@@ -81,8 +90,6 @@ export default FiltersComponent
 
 // Define the CustomBackDrop functional component
 const CustomBackDrop = ({ animatedIndex, style }) => {
-
-    // Create an animated style for the backdrop
     const animatedStyle = useAnimatedStyle(() => {
         let opacity = interpolate(
             animatedIndex.value,
@@ -95,21 +102,18 @@ const CustomBackDrop = ({ animatedIndex, style }) => {
         };
     });
 
-    // Combine styles for the container
     const containerStyle = useMemo(() => [
         style,
         StyleSheet.absoluteFillObject,
         animatedStyle,
-
     ], [style, animatedStyle]);
 
-    // Return the backdrop view with blur effect
     return (
         <Animated.View style={containerStyle}>
             <BlurView
-                blurType='light' // Use a light blur type for better background visibility
+                blurType='light'
                 style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.5)' }]}
-                blurAmount={3} // Adjust blur amount as needed
+                blurAmount={3}
             />
         </Animated.View>
     );
@@ -120,61 +124,70 @@ const Sections = {
     "orientation": (props) => <CommonFilterRow {...props} />,
     "type": (props) => <CommonFilterRow {...props} />,
     "colors": (props) => <ColorFilters {...props} />,
-
 }
-
 
 // Define the styles used in the components
 const styles = StyleSheet.create({
-
     contentContainer: {
         flex: 1,
         alignItems: 'center',
+        backgroundColor: theme.colors.background,
+    },
+    handleIndicator: {
+        backgroundColor: theme.colors.primary,
+        width: wp(15),
     },
     overLay: {
         backgroundColor: 'rgba(0,0,0,0.5)'
     },
     Content: {
-
-        //width: '100%',
-        gap: 15,
-        paddingHorizontal: 10,
-        paddingVertical: 20
+        width: '100%',
+        gap: 20,
+        paddingHorizontal: wp(5),
+        paddingVertical: hp(2)
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: hp(1)
     },
     title: {
-        fontSize: hp(4),
-        fontWeight: theme.fontWeights.semibold,
-        color: theme.colors.black,
-        marginBottom: 5
+        fontSize: hp(3.5),
+        fontWeight: theme.fontWeights.bold,
+        color: theme.colors.text,
     },
-    Buttons:{
-        flex:1,
-        flexDirection:'row',
-        alignItems:'center',
-        gap:10
+    Buttons: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: wp(3),
+        marginTop: hp(2),
+        paddingBottom: hp(2)
     },
-    applyButton:{
-        flex:1,
-        backgroundColor:theme.colors.black,
-        padding:12,
-        alignItems:'center',
-        justifyContent:'center',
-        borderRadius:theme.radius.lg,
-        borderCurve:'continuous'
+    applyButtonGradient: {
+        flex: 1,
+        borderRadius: theme.radius.lg,
+        borderCurve: 'continuous',
     },
-    resetButton:{
-        flex:1,
-        backgroundColor:theme.colors.neutral(0.83),
-        padding:12,
-        alignItems:'center',
-        justifyContent:'center',
-        borderRadius:theme.radius.lg,
-        borderCurve:'continuous',
-        borderWidth:2,
-        borderColor:theme.colors.grayBG
+    applyButton: {
+        padding: hp(1.8),
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    ButtonText:{
-        fontSize:hp(2.2),
-        fontWeight:theme.fontWeights.bold
+    resetButton: {
+        flex: 1,
+        backgroundColor: theme.colors.surface,
+        padding: hp(1.8),
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: theme.radius.lg,
+        borderCurve: 'continuous',
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+    },
+    ButtonText: {
+        fontSize: hp(2),
+        fontWeight: theme.fontWeights.bold,
+        letterSpacing: 0.5
     }
 });

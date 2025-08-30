@@ -1,7 +1,9 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import React from 'react'
-import { captilization, hp } from '../helpers/common'
+import { captilization, hp, wp } from '../helpers/common'
 import { theme } from '../constants/themes'
+import { LinearGradient } from 'expo-linear-gradient'
+import { MaterialCommunityIcons } from '@expo/vector-icons'
 
 const SectionView = ({ title, content }) => {
     return (
@@ -17,7 +19,6 @@ const SectionView = ({ title, content }) => {
 export default SectionView
 
 export const CommonFilterRow = ({ data, filterName, filters, setFilters }) => {
-
     const onSelect = (item) => {
         setFilters({ ...filters, [filterName]: item })
     }
@@ -27,19 +28,30 @@ export const CommonFilterRow = ({ data, filterName, filters, setFilters }) => {
             {
                 data && data.map((item, index) => {
                     let isActive = filters && filters[filterName] == item;
-                    let backgroundColor = isActive ? theme.colors.black : theme.colors.white;
-                    let color = isActive ? theme.colors.white : theme.colors.black;
-
-
                     return (
                         <Pressable
                             onPress={() => onSelect(item)}
                             key={item}
-                            style={[styles.ButtonOutLine, { backgroundColor }]}
+                            style={styles.buttonContainer}
                         >
-                            <Text style={[styles.OutlinedButtonText, { color }]}>
-                                {captilization(item)}
-                            </Text>
+                            {isActive ? (
+                                <LinearGradient
+                                    colors={theme.colors.gradientRoyal}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 1 }}
+                                    style={styles.ButtonOutLine}
+                                >
+                                    <Text style={[styles.OutlinedButtonText, { color: theme.colors.white }]}>
+                                        {captilization(item)}
+                                    </Text>
+                                </LinearGradient>
+                            ) : (
+                                <View style={[styles.ButtonOutLine, { backgroundColor: theme.colors.surface }]}>
+                                    <Text style={[styles.OutlinedButtonText, { color: theme.colors.text }]}>
+                                        {captilization(item)}
+                                    </Text>
+                                </View>
+                            )}
                         </Pressable>
                     )
                 })
@@ -47,8 +59,8 @@ export const CommonFilterRow = ({ data, filterName, filters, setFilters }) => {
         </View>
     )
 }
-export const ColorFilters = ({ data, filterName, filters, setFilters }) => {
 
+export const ColorFilters = ({ data, filterName, filters, setFilters }) => {
     const onSelect = (item) => {
         setFilters({ ...filters, [filterName]: item })
     }
@@ -58,16 +70,21 @@ export const ColorFilters = ({ data, filterName, filters, setFilters }) => {
             {
                 data && data.map((item, index) => {
                     let isActive = filters && filters[filterName] == item;
-                    let borderColor = isActive ? theme.colors.black : theme.colors.white;
-
-
                     return (
                         <Pressable
                             onPress={() => onSelect(item)}
                             key={item}
                         >
-                            <View style={[styles.colorWrapper, { borderColor }]}>
-                                <View style={[styles.color, { backgroundColor: item }]}></View>
+                            <View style={[styles.colorWrapper, isActive && styles.activeColorWrapper]}>
+                                <View style={[styles.color, { backgroundColor: item }]}>
+                                    {isActive && (
+                                        <MaterialCommunityIcons 
+                                            name="check" 
+                                            size={20} 
+                                            color={item === 'white' ? 'black' : 'white'} 
+                                        />
+                                    )}
+                                </View>
                             </View>
                         </Pressable>
                     )
@@ -77,43 +94,64 @@ export const ColorFilters = ({ data, filterName, filters, setFilters }) => {
     )
 }
 
-
-
 const styles = StyleSheet.create({
     SectionContainer: {
-        gap: 8
+        gap: 12,
+        marginBottom: 8
     },
     SectionTitle: {
         fontSize: hp(2.4),
         fontWeight: theme.fontWeights.semibold,
-        color: theme.colors.black,
+        color: theme.colors.text,
+        marginBottom: 4
     },
     flexBoxWrap: {
         gap: 10,
         flexDirection: 'row',
         flexWrap: 'wrap'
     },
-    ButtonOutLine: {
-        padding: 8,
-        paddingHorizontal: 14,
-        borderWidth: 1,
-        borderColor: theme.colors.black,
+    buttonContainer: {
+        overflow: 'hidden',
         borderRadius: theme.radius.xl,
-        borderCurve: 'continuous'
+    },
+    ButtonOutLine: {
+        padding: 10,
+        paddingHorizontal: 16,
+        borderWidth: 1,
+        borderColor: 'transparent',
+        borderRadius: theme.radius.xl,
+        borderCurve: 'continuous',
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
     },
     color: {
         height: 40,
         width: 40,
         borderRadius: 20,
-        borderCurve: 'continuous'
+        borderCurve: 'continuous',
+        alignItems: 'center',
+        justifyContent: 'center'
     },
     colorWrapper: {
         padding: 3,
         borderRadius: 20,
         borderWidth: 2,
+        borderColor: 'transparent',
         borderCurve: 'continuous'
-    },OutlinedButtonText:{
+    },
+    activeColorWrapper: {
+        borderColor: theme.colors.primary,
+        transform: [{scale: 1.1}]
+    },
+    OutlinedButtonText: {
         fontSize: hp(1.8),
-      fontWeight:theme.fontWeights.bold
+        fontWeight: theme.fontWeights.bold,
+        letterSpacing: 0.5
     }
 })

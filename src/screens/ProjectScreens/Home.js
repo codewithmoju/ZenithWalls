@@ -1,6 +1,6 @@
 // Import necessary components and libraries from React Native and other dependencies
-import { StyleSheet, Text, View, Pressable, Image, TextInput, ScrollView, StatusBar, ActivityIndicator } from 'react-native'
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { StyleSheet, Text, View, Pressable, Image, TextInput, ScrollView, StatusBar, ActivityIndicator, RefreshControl, Platform } from 'react-native'
+import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context'
 import { theme } from '../../constants/themes'
 import { hp, wp } from '../../helpers/common'
@@ -9,72 +9,186 @@ import { apiCall } from '../../API'
 import ImageGrid from '../../components/ImageGrid'
 import { debounce } from 'lodash'
 import FiltersComponent from '../../components/FiltersComponent'
+import { MaterialIcons } from '@expo/vector-icons'
+import Animated, { 
+  FadeInRight, 
+  useAnimatedStyle, 
+  useSharedValue, 
+  withSpring 
+} from 'react-native-reanimated'
+import { BlurView } from 'expo-blur'
 
 // Define the Home functional component
-const Home = () => {
-  var page = 1;
+const Home = ({ onScroll }) => {
+  const [page, setPage] = useState(1);
   const { Top } = SafeAreaInsetsContext;
   const paddingTop = Top > 0 ? Top + 10 : 30;
   const [search, setSearch] = useState('');
-  const [images, setImages] = useState([])
+  const [images, setImages] = useState([]);
+  const [loadedImageIds, setLoadedImageIds] = useState(new Set());
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [activeCategory, setActivecategory] = useState(null);
-  const [filters, setFilters] = useState(null)
+  const [filters, setFilters] = useState(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [adCounter, setAdCounter] = useState(0);
 
   const SearchInputRef = useRef(null);
-  const Modalref = useRef(null)
+  const Modalref = useRef(null);
+  const scrollViewRef = useRef(null);
+  const showScrollToTop = useSharedValue(false);
 
-  // Function to handle the search input changes
-  const HandleSearch = (text) => {
-    setSearch(text)
+  // Animated scroll to top button style
+  const scrollToTopStyle = useAnimatedStyle(() => {
+    return {
+      opacity: withSpring(showScrollToTop.value ? 1 : 0),
+      transform: [{ scale: withSpring(showScrollToTop.value ? 1 : 0.8) }],
+    };
+  });
+
+  // Memoized search handler for better performance
+  const handleSearch = useCallback((text) => {
+    setSearch(text);
     if (text.length > 2) {
-      // Search for images if text length is greater than 2
-      page = 1;
+      setPage(1);
       setImages([]);
-      setActivecategory(null)//clear category while searching
-      fetchImages({ page, q: text, ...filters }, false)
+      setLoadedImageIds(new Set());
+      setHasMore(true);
+      setActivecategory(null);
+      fetchImages({ page: 1, q: text, ...filters }, false);
     }
-    if (text == "") {
-      // Reset results if search text is empty
-      page = 1;
+    if (text === "") {
+      setPage(1);
       SearchInputRef?.current?.clear();
-      setActivecategory(null)//clear category while searching
+      setActivecategory(null);
       setImages([]);
-      fetchImages({ page, ...filters }, false)
+      setLoadedImageIds(new Set());
+      setHasMore(true);
+      fetchImages({ page: 1, ...filters }, false);
     }
-  }
+  }, [filters]);
 
-  // Debounce the search input changes to limit the API calls
-  const handleTextDebounce = useCallback(debounce(HandleSearch, 400), [])
+  const handleTextDebounce = useMemo(() => 
+    debounce(handleSearch, 400), 
+    [handleSearch]
+  );
 
-  // Fetch images on component mount
+  // Pull to refresh handler
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    setPage(1);
+    setHasMore(true);
+    setLoadedImageIds(new Set());
+    await fetchImages({ 
+      page: 1, 
+      q: search,
+      category: activeCategory,
+      ...filters 
+    }, false);
+    setRefreshing(false);
+  }, [search, activeCategory, filters]);
+
   useEffect(() => {
     fetchImages();
-  }, [])
+  }, []);
 
-  // Function to fetch images from the API
   const fetchImages = async (params = { page: 1 }, append = true) => {
-    let res = await apiCall(params)
-    if (res.success && res?.data?.hits) {
-      if (append)
-        setImages([...images, ...res.data.hits])
-      else
-        setImages([...res.data.hits])
+    try {
+      if (!hasMore && append) {
+        console.log('No more images to load');
+        return;
+      }
+      if (loading) {
+        console.log('Already loading images');
+        return;
+      }
+      setLoading(true);
+      
+      // Add image quality parameters for better performance
+      const optimizedParams = {
+        ...params,
+        per_page: 20,  // Number of images per request
+        safesearch: true,  // Safe content only
+        min_width: 800,   // Minimum image width
+        min_height: 800,  // Minimum image height
+      };
+      
+      let res = await apiCall(optimizedParams);
+      if (res.success && res?.data?.hits) {
+        // Filter out duplicates
+        const newImages = res.data.hits.filter(img => !loadedImageIds.has(img.id));
+        
+        if (newImages.length === 0) {
+          // If all images were duplicates, try loading the next page immediately
+          if (append) {
+            const nextPage = params.page + 1;
+            setPage(nextPage);
+            setLoading(false);
+            fetchImages({ ...optimizedParams, page: nextPage }, true);
+          }
+          return;
+        }
+        
+        // Update the set of loaded image IDs
+        const newImageIds = new Set(newImages.map(img => img.id));
+        setLoadedImageIds(prev => new Set([...prev, ...newImageIds]));
+
+        // Pre-process images to ensure they have all required properties
+        const processedImages = newImages.map(img => ({
+          ...img,
+          webformatURL: img.webformatURL.replace('_640', '_480'), // Request smaller images for better performance
+          id: img.id.toString(), // Ensure ID is string
+        }));
+
+        if (append) {
+          setImages(prev => [...prev, ...processedImages]);
+        } else {
+          setImages(processedImages);
+          setLoadedImageIds(newImageIds);
+        }
+        // Check if we have more images to load
+        setHasMore(newImages.length > 0);
+      }
+    } catch (error) {
+      console.error('Error fetching images:', error);
+      setHasMore(false);
+    } finally {
+      setLoading(false);
     }
-  }
+  };
+
+  const handleLoadMore = useCallback(async () => {
+    if (!loading && hasMore && page < 50) {
+      const nextPage = page + 1;
+      setPage(nextPage);
+      
+      // Previously used to trigger interstitial ads; retained counter for potential future use
+      setAdCounter(prev => prev + 1);
+
+      fetchImages({ 
+        page: nextPage, 
+        q: search, 
+        category: activeCategory,
+        ...filters 
+      }, true);
+    }
+  }, [page, loading, hasMore, search, activeCategory, filters]);
 
   // Function to handle active category change
   const handleActiveCategory = (cat) => {
-    setActivecategory(cat)
+    setActivecategory(cat);
     clearSearch();
     setImages([]);
-    page = 1
+    setLoadedImageIds(new Set());
+    setPage(1);
+    setHasMore(true);
     let params = {
-      page,
+      page: 1,
       ...filters
-    }
+    };
     if (cat) params.category = cat;
-    fetchImages(params, false)
-  }
+    fetchImages(params, false);
+  };
 
   // Function to clear the search input
   const clearSearch = () => {
@@ -89,11 +203,10 @@ const Home = () => {
     Modalref?.current?.close();
   }
 
-
   const Applyfilter = () => {
     ClosefiltersModal();
     if (filters) {
-      page = 1;
+      setPage(1);
       setImages([]);
       let params = {
         page,
@@ -108,12 +221,11 @@ const Home = () => {
     ClosefiltersModal();
 
     if (filters) {
-      page = 1;
+      setPage(1);
       setFilters(null)
       setImages([]);
       let params = {
         page,
-
       }
       if (activeCategory) params.category = activeCategory;
       if (search) params.q = search
@@ -121,12 +233,11 @@ const Home = () => {
     }
   }
 
-
   const clearThisFilter = (filterName) => {
     let newFilters = { ...filters };
     delete newFilters[filterName];
     setFilters({ ...newFilters });
-    page = 1;
+    setPage(1);
     setImages([]);
     let params = {
       page,
@@ -137,140 +248,161 @@ const Home = () => {
     fetchImages(params, false)
   }
 
+  const handleScrollToTop = () => {
+    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+  };
+
   // Return the JSX layout for the Home screen
   return (
-    <View style={[styles.container, { paddingTop }]}>
+    <View style={[styles.container]}>
       <StatusBar
-        barStyle={'dark-content'}
+        barStyle={'light-content'}
         translucent={true}
         backgroundColor={'transparent'}
       />
-      <ScrollView contentContainerStyle={{ gap: 15 }}>
-        <View style={styles.header}>
-          <Pressable>
-            <Text style={styles.headertext}>
-              Zenith Walls
-            </Text>
-          </Pressable>
-          <Pressable onPress={OpenfiltersModal}>
-            <Image
-              source={require('../../drawable/Icons/bars.png')}
-              style={{ height: 22, width: 22 }}
+      
+      <ScrollView 
+        ref={scrollViewRef}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        onScroll={(event) => {
+          const offsetY = event.nativeEvent.contentOffset.y;
+          const contentHeight = event.nativeEvent.contentSize.height;
+          const scrollViewHeight = event.nativeEvent.layoutMeasurement.height;
+          
+          // Show/hide scroll to top button
+          showScrollToTop.value = offsetY > 300;
+          
+          // Check if user has scrolled to the bottom (with a threshold of 50px)
+          const isCloseToBottom = contentHeight - scrollViewHeight - offsetY < 50;
+          if (isCloseToBottom && !loading && hasMore) {
+            handleLoadMore();
+          }
+          
+          if (onScroll) onScroll(event);
+        }}
+        scrollEventThrottle={16}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.colors.primary}
+            colors={[theme.colors.primary]}
+            // style={{marginTop:20}}
+          />
+        }
+      >
+        {/* Header moved inside ScrollView */}
+        <View style={styles.headerContainer}>
+          <View style={styles.headerBlur}>
+          <View style={styles.header}>
+            <Pressable>
+              <Text style={styles.headertext}>
+                Zenith Walls
+              </Text>
+            </Pressable>
+            <Pressable 
+              onPress={OpenfiltersModal}
+              style={styles.filterButton}
+            >
+              <MaterialIcons name="tune" size={24} color={theme.colors.text} />
+            </Pressable>
+          </View>
+
+          {/* Search bar */}
+            <View style={styles.SearchBar}>
+            <View style={styles.Icon}>
+              <MaterialIcons name="search" size={20} color={theme.colors.textSecondary} />
+            </View>
+            <TextInput
+              placeholder='Search wallpapers...'
+              placeholderTextColor={theme.colors.textSecondary}
+              ref={SearchInputRef}
+              onChangeText={handleTextDebounce}
+              style={styles.textInput}
             />
-          </Pressable>
+            {search && (
+              <Pressable 
+                onPress={() => { handleSearch("") }}
+                style={styles.clearButton}
+              >
+                <MaterialIcons name="close" size={20} color={theme.colors.textSecondary} />
+              </Pressable>
+            )}
+            </View>
+          </View>
         </View>
 
-        {/* Search bar */}
-        <View style={styles.SearchBar}>
-          <View style={styles.Icon}>
-            <Image
-              source={require('../../drawable/Icons/find.png')}
-              style={styles.SearchIcon}
+        <View style={styles.contentContainer}>
+          {/* Active Filters */}
+          {filters && Object.keys(filters).length > 0 && (
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.activeFiltersContainer}
+            >
+              {Object.entries(filters).map(([key, value], index) => (
+                <Animated.View
+                  key={key}
+                  entering={FadeInRight.delay(index * 100).springify()}
+                >
+                  <Pressable
+                    style={styles.activeFilter}
+                    onPress={() => clearThisFilter(key)}
+                  >
+                    <Text style={styles.activeFilterText}>{value}</Text>
+                    <MaterialIcons name="close" size={16} color={theme.colors.text} />
+                  </Pressable>
+                </Animated.View>
+              ))}
+            </ScrollView>
+          )}
+
+          {/* Categories */}
+          <View style={styles.categories}>
+            <CategoriesComponent
+              activeCategory={activeCategory}
+              handleActiveCategory={handleActiveCategory}
             />
           </View>
-          <TextInput
-            placeholder='search something'
-            placeholderTextColor={theme.colors.black}
-            ref={SearchInputRef}
-            onChangeText={handleTextDebounce}
-            style={styles.textInput}
+
+          {/* Image Grid */}
+          <ImageGrid 
+            images={images} 
+            onLoadMore={handleLoadMore}
+            loading={loading}
           />
-          {
-            search && (
-              <Pressable onPress={() => { HandleSearch("") }}>
-                <Image
-                  source={require('../../drawable/Icons/cross-button.png')}
-                  style={styles.crossIcon}
-                />
-              </Pressable>
-            )
-          }
-        </View>
 
-        {/* Categories component */}
-        <View style={styles.categories}>
-          <CategoriesComponent
-            activeCategory={activeCategory}
-            handleActiveCategory={handleActiveCategory}
-          />
-        </View>
-
-
-
-
-        {/* filters */}
-        {
-          filters && (
-            <View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.Filter}>
-                {
-                  Object.keys(filters).map((key, index) => {
-                    return (
-                      <View key={key} style={styles.filterItem}>
-                        {
-                          key == 'colors' ? (
-                            <View style={{
-                              height: 20,
-                              width: 30,
-                              borderRadius: 7,
-                              backgroundColor: filters[key]
-                            }}>
-
-                            </View>
-                          ) : (
-                            <Text style={styles.filterItemText}>{filters[key]}</Text>
-                          )
-                        }
-
-                        <Pressable style={styles.filterCloseIcon} onPress={() => clearThisFilter(key)}>
-                          <Image
-                            source={require('../../drawable/Icons/cross-button.png')}
-                            style={[styles.crossIcon, { height: 14, width: 14 }]}
-                          />
-                        </Pressable>
-                      </View>
-                    )
-
-                  })
-                }
-              </ScrollView>
+          {!loading && !hasMore && images.length > 0 && (
+            <View style={styles.endMessageContainer}>
+              <Text style={styles.endMessage}>No more wallpapers to load</Text>
             </View>
-
-          )
-        }
-
-
-
-
-
-        {/* Images masonry grid */}
-        <View>
-          {
-            images.length > 0 && <ImageGrid
-              images={images}
-            />
-          }
+          )}
         </View>
-        {/* Loading */}
+      </ScrollView>
 
-        <View style={{ marginBottom: 70, margintop: images.length > 0 ? 10 : 70 }}>
-          <ActivityIndicator
-            size={'large'}
-          />
+      {/* Scroll to Top Button */}
+      <Animated.View style={[styles.scrollToTopButton, scrollToTopStyle]}>
+        <Pressable
+          onPress={handleScrollToTop}
+          style={styles.scrollToTopButtonInner}
+        >
+          <MaterialIcons name="keyboard-arrow-up" size={28} color={theme.colors.white} />
+        </Pressable>
+      </Animated.View>
 
-        </View>
-
-      </ScrollView >
-      {/*Filters Modal */}
-      < FiltersComponent
+      {/* Filters Modal */}
+      <FiltersComponent
         Modalref={Modalref}
-        filters={filters}
-        setFilters={setFilters}
         onClose={ClosefiltersModal}
         onApply={Applyfilter}
         onReset={Resetfilter}
+        filters={filters}
+        setFilters={setFilters}
       />
-    </View >
+
+      {/* Banner placeholder removed since ads are disabled */}
+    </View>
   )
 }
 
@@ -281,73 +413,126 @@ export default Home
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    gap: 15
+    backgroundColor: theme.colors.background,
+  },
+  headerContainer: {
+    backgroundColor: theme.colors.background,
+    paddingTop: Platform.OS === 'ios' ? 50 : 40,
+  },
+  headerBlur: {
+    paddingHorizontal: 15,
+    paddingBottom: 10,
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 15
+    alignItems: 'center',
+    marginTop: 5,
   },
   headertext: {
-    fontSize: hp(4),
-    fontWeight: theme.fontWeights.semibold,
-    color: theme.colors.black
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+  },
+  filterButton: {
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    ...theme.shadows.sm,
   },
   SearchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 6,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
+    borderRadius: 20,
+    marginTop: 15,
+    marginBottom: 5,
+    paddingHorizontal: 20,
+    height: 52,
     borderWidth: 1,
-    borderColor: theme.colors.grayBG,
-    borderRadius: theme.radius.lg,
-    marginHorizontal: wp(4),
-    paddingLeft: 10
+    borderColor: theme.colors.borderLight,
+    ...theme.shadows.luxury,
   },
-  crossIcon: {
-    height: 24,
-    width: 24,
-    tintColor: theme.colors.black,
-    padding: 8,
-    backgroundColor: theme.colors.grayBG,
-    borderRadius: theme.radius.sm
-  },
-  SearchIcon: {
-    height: 24,
-    width: 24,
-    tintColor: theme.colors.black,
-    padding: 8
+  Icon: {
+    marginRight: 10,
   },
   textInput: {
     flex: 1,
-    fontSize: hp(1.8),
-    borderRadius: theme.radius.sm,
-    paddingVertical: 10,
-    color: theme.colors.black
+    color: theme.colors.text,
+    fontSize: 16,
   },
-  Filter: {
-    gap: 10,
+  clearButton: {
+    padding: 5,
+  },
+  scrollContent: {
+    paddingTop: 0,
+  },
+  contentContainer: {
+    gap: theme.spacing.md,
+  },
+  categories: {
+    marginTop: 0, // Removed margin
+  },
+  activeFiltersContainer: {
     paddingHorizontal: wp(4),
+    gap: theme.spacing.sm,
   },
-  filterItem: {
-    backgroundColor: theme.colors.white,
+  activeFilter: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: theme.radius.xs,
-    padding: 8,
-    padding: 3,
-    gap: 10,
-    paddingHorizontal: 10,
+    backgroundColor: theme.colors.surface,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    borderRadius: theme.radius.lg,
+    gap: theme.spacing.sm,
+    ...theme.shadows.sm,
   },
-  filterItemText: {
-    fontSize: hp(1.9),
-    color: theme.colors.black,
-    fontWeight: theme.fontWeights.medium
+  activeFilterText: {
+    fontSize: hp(1.8),
+    color: theme.colors.text,
+    fontWeight: theme.fontWeights.medium,
   },
-  filterCloseIcon: {
-    backgroundColor: theme.colors.neutral(0.2),
-    padding: 4,
-    borderRadius: 7
+  endMessageContainer: {
+    padding: theme.spacing.xl,
+    alignItems: 'center',
+  },
+  endMessage: {
+    color: theme.colors.textSecondary,
+    fontSize: hp(1.8),
+    fontWeight: theme.fontWeights.medium,
+  },
+  scrollToTopButton: {
+    position: 'absolute',
+    bottom: 90, // Position above the tab bar
+    right: 20,
+    zIndex: 10,
+  },
+  scrollToTopButtonInner: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 5,
+      },
+      android: {
+        elevation: 5,
+      },
+    }),
+  },
+  bannerContainer: {
+    width: '100%',
+    height: 50,
+    backgroundColor: 'transparent',
+    position: 'absolute',
+    bottom: 0
   }
-})
+});

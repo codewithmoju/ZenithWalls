@@ -1,81 +1,130 @@
 // Import necessary components and libraries from React Native and other dependencies
-import { StyleSheet, Text, View, StatusBar, Image, TouchableOpacity } from 'react-native'
-import React from 'react'
+import { 
+    StyleSheet, 
+    Text, 
+    View, 
+    StatusBar, 
+    Image, 
+    TouchableOpacity, 
+    Platform 
+} from 'react-native'
+import React, { useCallback, memo } from 'react'
 import { wp, hp } from '../../helpers/common'
-import LinearGradient from 'react-native-linear-gradient'
-import Animated, { FadeInUp } from 'react-native-reanimated'
+import { LinearGradient } from 'expo-linear-gradient'
+import Animated, { 
+    FadeInUp,
+    interpolate,
+    useAnimatedStyle,
+    withSpring,
+    useSharedValue,
+    withSequence,
+    withTiming 
+} from 'react-native-reanimated'
 import { theme } from '../../constants/themes'
 import { useNavigation } from '@react-navigation/native'
+import * as SplashScreen from 'expo-splash-screen'
+
+// Preload the image
+const welcomeImage = require('../../drawable/pictures/welcome1.png')
+Image.prefetch(Platform.select({
+    ios: Image.resolveAssetSource(welcomeImage).uri,
+    android: welcomeImage
+}))
+
+const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity)
 
 // Define the WelcomeScreen functional component
 const WelcomeScreen = () => {
-    // Use navigation hook to enable navigation between screens
-    const navigation = useNavigation();
+    const navigation = useNavigation()
+    const buttonScale = useSharedValue(1)
+
+    // Optimize button press animation
+    const handlePressIn = useCallback(() => {
+        buttonScale.value = withSpring(0.95, { damping: 15 })
+    }, [])
+
+    const handlePressOut = useCallback(() => {
+        buttonScale.value = withSpring(1, { damping: 15 })
+    }, [])
+
+    const handleNavigate = useCallback(() => {
+        navigation.navigate('Home')
+    }, [navigation])
+
+    const buttonAnimatedStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: buttonScale.value }]
+    }))
 
     // Return the JSX layout for the WelcomeScreen
     return (
         <View style={styles.container}>
             {/* Configure the status bar with light content and a transparent background */}
             <StatusBar
-                barStyle={'light-content'}
-                translucent={true}
-                backgroundColor={'transparent'}
+                barStyle="light-content"
+                translucent
+                backgroundColor="transparent"
             />
 
-            {/* Display a background image */}
+            {/* Optimized background image */}
             <Image
-                source={require('../../drawable/pictures/welcome1.png')}
+                source={welcomeImage}
                 style={styles.bgImage}
-                resizeMode='cover'
+                resizeMode="cover"
+                defaultSource={welcomeImage}
+                loading="eager"
+                fadeDuration={0}
             />
 
-            {/* Animated view container for the main content, with fade-in animation */}
-            <Animated.View entering={FadeInUp.duration(600).springify().damping(200)} style={{ flex: 1 }}>
-                {/* Linear gradient background at the bottom of the screen */}
+            <Animated.View 
+                entering={FadeInUp.duration(500).springify()} 
+                style={styles.contentWrapper}
+            >
                 <LinearGradient
-                    colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.5)', 'white', 'white']}
-                    style={styles.LinearGradient}
+                    colors={[
+                        'rgba(3, 7, 18, 0)',
+                        'rgba(3, 7, 18, 0.4)',
+                        'rgba(3, 7, 18, 0.8)',
+                        theme.colors.background,
+                        theme.colors.background
+                    ]}
+                    style={styles.linearGradient}
                     start={{ x: 0.5, y: 0 }}
-                    end={{ x: 0.5, y: 0.8 }}
+                    end={{ x: 0.5, y: 0.9 }}
                 />
 
-                {/* Container for the content in the middle of the screen */}
-                <View style={styles.contentcontainer}>
-                    {/* Animated title text with fade-in and spring animation */}
+                <View style={styles.contentContainer}>
                     <Animated.Text
-                        entering={FadeInUp.delay(600).springify().damping(200)}
-                        style={styles.title}>
+                        entering={FadeInUp.delay(200).springify()}
+                        style={styles.title}
+                    >
                         Zenith Walls
                     </Animated.Text>
 
-                    {/* Animated subtitle text with fade-in and spring animation */}
-                    <Animated.Text style={styles.text}
-                        entering={FadeInUp.delay(600).springify().damping(200)}
+                    <Animated.Text 
+                        style={styles.text}
+                        entering={FadeInUp.delay(300).springify()}
                     >
                         Elevate your screen with Zenith Walls
                     </Animated.Text>
 
-                    {/* Animated view for the start button with fade-in and spring animation */}
-                    <Animated.View
-                        entering={FadeInUp.delay(600).springify().damping(200)}
+                    <AnimatedTouchableOpacity
+                        onPress={handleNavigate}
+                        onPressIn={handlePressIn}
+                        onPressOut={handlePressOut}
+                        style={[styles.startButton, buttonAnimatedStyle]}
+                        activeOpacity={1}
                     >
-                        {/* Linear gradient for the start button */}
                         <LinearGradient
-                            colors={['#5d53f7', '#9820dd']}
+                            colors={theme.colors.gradientRoyal}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 1 }}
-                            style={styles.Startbutton}
+                            style={styles.startButtonGradient}
                         >
-                            <TouchableOpacity
-                                onPress={() => navigation.navigate('Home')}
-                                style={styles.StartbuttonInner}
-                            >
-                                <Text style={styles.Starttext}>
-                                    Start Explore
-                                </Text>
-                            </TouchableOpacity>
+                            <Text style={styles.startText}>
+                                Start Explore
+                            </Text>
                         </LinearGradient>
-                    </Animated.View>
+                    </AnimatedTouchableOpacity>
                 </View>
             </Animated.View>
         </View>
@@ -83,55 +132,78 @@ const WelcomeScreen = () => {
 }
 
 // Export the WelcomeScreen component as the default export
-export default WelcomeScreen
+export default memo(WelcomeScreen)
 
 // Define the styles used in the WelcomeScreen component
 const styles = StyleSheet.create({
     container: {
-        flex: 1 // Make the container take up the full screen height
+        flex: 1,
+        backgroundColor: theme.colors.background
+    },
+    contentWrapper: {
+        flex: 1
     },
     bgImage: {
-        width: wp(100), // Set width to 100% of the screen width
-        height: hp(100), // Set height to 100% of the screen height
-        position: 'absolute' // Position the image absolutely to fill the container
+        width: wp(100),
+        height: hp(100),
+        position: 'absolute',
+        ...Platform.select({
+            android: {
+                resizeMethod: 'resize'
+            }
+        })
     },
-    LinearGradient: {
-        width: wp(100), // Set width to 100% of the screen width
-        height: hp(65), // Set height to 65% of the screen height
-        position: 'absolute', // Position the gradient absolutely at the bottom
-        bottom: 0,
+    linearGradient: {
+        width: wp(100),
+        height: hp(70),
+        position: 'absolute',
+        bottom: 0
     },
-    contentcontainer: {
+    contentContainer: {
         flex: 1,
-        alignItems: 'center', // Center the content horizontally
-        justifyContent: 'flex-end', // Align the content at the bottom
-        gap: 14 // Add vertical spacing between elements
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        gap: hp(2),
+        paddingBottom: hp(8)
     },
     title: {
-        fontSize: hp(7), // Set font size based on screen height
-        color: "#000", // Set text color to black
-        fontWeight: theme.fontWeights.bold // Use bold font weight from theme
+        fontSize: hp(7),
+        color: theme.colors.text,
+        fontWeight: theme.fontWeights.bold,
+        textShadowColor: 'rgba(0, 0, 0, 0.5)',
+        textShadowOffset: { width: 0, height: 2 },
+        textShadowRadius: 4,
+        includeFontPadding: false,
+        textAlign: 'center'
     },
     text: {
-        fontSize: hp(2), // Set font size based on screen height
-        letterSpacing: 1, // Add letter spacing
-        marginBottom: 10, // Add bottom margin
-        fontWeight: theme.fontWeights.medium, // Use medium font weight from theme
-        color: "#000", // Set text color to black
+        fontSize: hp(2),
+        letterSpacing: 1,
+        marginBottom: hp(1),
+        fontWeight: theme.fontWeights.medium,
+        color: theme.colors.textSecondary,
+        textShadowColor: 'rgba(0, 0, 0, 0.3)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 2,
+        includeFontPadding: false,
+        textAlign: 'center'
     },
-    Startbutton: {
-        marginBottom: 50, // Add bottom margin
-        borderRadius: theme.radius.xl, // Set border radius from theme
-        overflow: 'hidden', // Ensure the gradient doesn't overflow
+    startButton: {
+        borderRadius: theme.radius.xl,
+        overflow: 'hidden',
+        marginTop: hp(2)
     },
-    StartbuttonInner: {
-        padding: 15, // Add padding
-        paddingHorizontal: 90, // Add horizontal padding
+    startButtonGradient: {
+        paddingVertical: hp(1.8),
+        paddingHorizontal: wp(22),
+        alignItems: 'center',
+        justifyContent: 'center'
     },
-    Starttext: {
-        fontSize: hp(3), // Set font size based on screen height
-        color: theme.colors.white, // Set text color to white from theme
-        fontWeight: theme.fontWeights.medium, // Use medium font weight from theme
-        letterSpacing: 1 // Add letter spacing
+    startText: {
+        fontSize: hp(2.4),
+        color: theme.colors.white,
+        fontWeight: theme.fontWeights.semibold,
+        letterSpacing: 0.5,
+        includeFontPadding: false
     }
 })
